@@ -115,6 +115,54 @@ class AnthropicClient(LLMClient):
             )
 
 
+class GoogleAIClient(LLMClient):
+    """Google AI (Gemini) API client."""
+    
+    def __init__(self, api_key: str = None, model: str = "gemini-2.0-flash"):
+        super().__init__(api_key or settings.google_ai_api_key, model)
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta"
+    
+    async def complete(self, messages: List[Message], **kwargs) -> LLMResponse:
+        # Convert messages to Google AI format
+        contents = []
+        for msg in messages:
+            role = "user" if msg.role in ["user", "system"] else "model"
+            contents.append({
+                "role": role,
+                "parts": [{"text": msg.content}]
+            })
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.base_url}/models/{self.model}:generateContent",
+                headers={"Content-Type": "application/json"},
+                params={"key": self.api_key},
+                json={
+                    "contents": contents,
+                    "generationConfig": {
+                        "maxOutputTokens": kwargs.get("max_tokens", 4096),
+                        "temperature": kwargs.get("temperature", 0.7)
+                    }
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            content = data["candidates"][0]["content"]["parts"][0]["text"]
+            usage_data = data.get("usageMetadata", {})
+            
+            return LLMResponse(
+                content=content,
+                provider=LLMProvider.GOOGLE,
+                model=self.model,
+                usage={
+                    "prompt_tokens": usage_data.get("promptTokenCount", 0),
+                    "completion_tokens": usage_data.get("candidatesTokenCount", 0),
+                    "total_tokens": usage_data.get("totalTokenCount", 0)
+                }
+            )
+
+
 class CollaborationSession:
     """Manages a multi-LLM collaboration session."""
     
@@ -145,13 +193,16 @@ class CollaborationSession:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         valid_results = []
-        for result in results:
+        for i, result in enumerate(results):
+            provider = list(self.llm_clients.keys())[i]
             if isinstance(result, Exception):
-                logger.error(f"LLM error: {result}")
+                logger.error(f"LLM error from {provider.value}: {result}")
             else:
+                logger.info(f"LLM success from {provider.value}: {len(result.content)} chars")
                 valid_results.append(result)
                 self.results.append(result)
         
+        logger.info(f"Parallel execution completed: {len(valid_results)} successful out of {len(results)} total")
         return valid_results
     
     async def run_sequential(self, prompts: List[str], providers: List[LLMProvider], **kwargs) -> List[LLMResponse]:
@@ -213,12 +264,13 @@ class LLMOrchestrator:
     
     def setup_default_llms(self, session: CollaborationSession):
         """Set up default LLMs based on available API keys."""
-        if settings.openai_api_key:
+        if settings.openai_api_key and settings.openai_api_key != "your_openai_api_key":
             session.add_llm(LLMProvider.OPENAI, OpenAIClient())
         
-        if settings.anthropic_api_key:
+        if settings.anthropic_api_key and settings.anthropic_api_key != "your_anthropic_api_key":
             session.add_llm(LLMProvider.ANTHROPIC, AnthropicClient())
         
-        # Add Google AI client when implemented
+        if settings.google_ai_api_key and settings.google_ai_api_key != "your_google_ai_api_key":
+            session.add_llm(LLMProvider.GOOGLE, GoogleAIClient())
         
         logger.info(f"Set up {len(session.llm_clients)} LLMs for session {session.session_id}")

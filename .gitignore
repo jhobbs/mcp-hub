@@ -63,6 +63,10 @@ temp/
 *.bak
 *.cache
 
+# Docker
+.docker/
+docker-compose.override.yml
+
 # OS
 Thumbs.db
 .DS_Store

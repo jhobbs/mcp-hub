@@ -1,110 +1,122 @@
-# MCP Hub - Multi-LLM Collaboration Platform
+# MCP Hub - AI Tools & Cloud Integration
 
-A Model Context Protocol (MCP) server that enables multiple LLMs to collaborate and integrates with various cloud services and APIs for "less attended" development workflows.
+A Model Context Protocol (MCP) server that provides Google AI (Gemini) integration and cloud service tools.
 
 ## Features
 
-- **Multi-LLM Collaboration**: Run prompts across OpenAI, Anthropic, and Google AI models in parallel or sequential mode
+- **Google AI (Gemini) Integration**: Ask questions to Google's Gemini models (2.0-flash, 2.5-flash, etc.)
 - **GitHub Integration**: Create issues, pull requests, and list repository information
 - **AWS Integration**: Manage EC2, S3, Lambda, and other AWS services
-- **Google APIs Integration**: Access Drive, Calendar, and other Google services (coming soon)
-- **Fly.io Integration**: Deploy and manage applications (coming soon)
+- **Health Monitoring**: Built-in health check and utility tools
 - **Extensible Architecture**: Easy to add new tool integrations
 
 ## Quick Start
 
-### 1. Clone and Install
+### 1. Setup Environment
 
 ```bash
 cd /home/jason/mcp/mcp-hub
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
 pip install -e .
 ```
 
-### 2. Configure Environment
+### 2. Configure API Keys
 
-Copy the example environment file and add your API keys:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your credentials:
+Edit `.env` file with your API keys:
 - GitHub personal access token
-- AWS credentials
-- LLM API keys (OpenAI, Anthropic, Google AI)
+- AWS credentials  
+- Google AI API key
 - Other service credentials as needed
 
-### 3. Run the Server
+### 3. Configure Claude Desktop
 
-```bash
-python main_v2.py
+Add to your Claude Desktop config (`claude_desktop_config.json`):
+
+**For WSL (Windows):**
+```json
+{
+  "mcpServers": {
+    "mcp-hub": {
+      "command": "wsl",
+      "args": [
+        "-e", 
+        "/home/jason/mcp/mcp-hub/venv/bin/python", 
+        "/home/jason/mcp/mcp-hub/main.py"
+      ]
+    }
+  }
+}
 ```
 
-Or test the server first:
-```bash
-python test_server.py
+**For Linux/Mac:**
+```json
+{
+  "mcpServers": {
+    "mcp-hub": {
+      "command": "/home/jason/mcp/mcp-hub/venv/bin/python",
+      "args": ["/home/jason/mcp/mcp-hub/main.py"]
+    }
+  }
+}
 ```
 
-The server will start and be available for MCP clients to connect.
+**Testing the server manually:**
+```bash
+# In WSL/Linux terminal
+cd /home/jason/mcp/mcp-hub
+source venv/bin/activate
+python main.py
+```
+
+## Available Tools
+
+### Core Tools
+- **`ask_gemini`**: Ask Google AI (Gemini) questions
+- **`health_check`**: Check server health status
+- **`add_numbers`**: Simple math utility for testing
+
+### GitHub Tools  
+- **`github_create_issue`**: Create new GitHub issues
+- **`github_create_pr`**: Create pull requests
+- **`github_list_issues`**: List issues with filters
+
+### AWS Tools
+- **`aws_ec2_list_instances`**: List EC2 instances
+- **`aws_s3_list_buckets`**: List S3 buckets
+- **`aws_s3_list_objects`**: List objects in S3 buckets
 
 ## Usage Examples
 
-### Multi-LLM Collaboration
-
-The server provides an `llm_collaborate` tool that allows you to:
-
-1. **Parallel Execution**: Run the same prompt across multiple LLMs simultaneously
+### Ask Gemini (Primary Feature)
 ```json
 {
-  "tool": "llm_collaborate",
-  "arguments": {
-    "session_id": "dev-session-1",
-    "prompt": "Generate a Python function to parse JSON with error handling",
-    "mode": "parallel"
-  }
+  "prompt": "What is the moon made of?",
+  "model": "gemini-2.0-flash"
 }
 ```
 
-2. **Sequential Execution**: Run prompts in sequence, building on previous responses
+Available models: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-exp`, `gemini-1.5-flash`
+
+### Create GitHub Issue
 ```json
 {
-  "tool": "llm_collaborate",
-  "arguments": {
-    "session_id": "dev-session-1",
-    "prompt": "Review and improve this code",
-    "mode": "sequential",
-    "providers": ["openai", "anthropic"]
-  }
+  "repo": "username/repository",
+  "title": "Bug: API endpoint returns 500",
+  "body": "Description of the issue...",
+  "labels": ["bug", "high-priority"]
 }
 ```
 
-### GitHub Integration
-
-Create issues, PRs, and manage repositories:
-
+### List AWS S3 Buckets
 ```json
 {
-  "tool": "github_create_issue",
-  "arguments": {
-    "repo": "username/repository",
-    "title": "Bug: API endpoint returns 500",
-    "body": "Description of the issue...",
-    "labels": ["bug", "high-priority"]
-  }
-}
-```
-
-### AWS Integration
-
-Manage AWS resources:
-
-```json
-{
-  "tool": "aws_lambda_invoke",
-  "arguments": {
-    "function_name": "my-data-processor",
-    "payload": {"action": "process", "data": "..."}
-  }
+  "prefix": "my-project",
+  "region": "us-east-1"
 }
 ```
 
@@ -112,20 +124,18 @@ Manage AWS resources:
 
 ```
 mcp-hub/
-├── servers/          # MCP server implementations
-│   └── base.py      # Base MCP server class
-├── tools/           # Tool integrations
+├── main.py              # Main MCP server
+├── config/              # Configuration management
+│   └── settings.py
+├── tools/               # Tool integrations
 │   ├── github_tools.py
 │   ├── aws_tools.py
 │   └── ...
-├── lib/             # Core libraries
-│   └── llm_collaboration.py
-├── config/          # Configuration management
-│   └── settings.py
-└── main.py          # Entry point
+└── lib/                 # Core libraries
+    └── llm_collaboration.py  # Google AI client
 ```
 
-## Adding New Integrations
+## Adding New Tools
 
 1. Create a new file in `tools/` directory
 2. Implement tool classes following the pattern in existing tools
@@ -133,21 +143,21 @@ mcp-hub/
 
 Example tool structure:
 ```python
-from mcp import Tool
-from mcp.types import TextContent
+async def my_tool(params: Dict[str, Any]) -> str:
+    """My custom tool."""
+    return "Tool result"
 
-class MyServiceTools:
-    def create_example_tool(self) -> Tool:
-        async def handler(params: Dict[str, Any]) -> TextContent:
-            # Tool implementation
-            return TextContent(type="text", text="Result")
-        
-        return Tool(
-            name="my_service_action",
-            description="Description of what this tool does",
-            inputSchema=ParamsModel.model_json_schema(),
-            handler=handler
-        )
+tools["my_tool"] = {
+    "description": "Description of what this tool does",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "param": {"type": "string", "description": "Parameter description"}
+        },
+        "required": ["param"]
+    },
+    "handler": my_tool
+}
 ```
 
 ## Development
@@ -174,14 +184,6 @@ mypy .
 - Never commit `.env` files to version control
 - Use least-privilege IAM roles for AWS access
 - Rotate API keys regularly
-
-## Future Enhancements
-
-- Google Home integration for IoT control
-- GPU provider integrations for ML workloads
-- Enhanced LLM collaboration with semantic analysis
-- Workflow automation and scheduling
-- Web UI for monitoring and management
 
 ## License
 

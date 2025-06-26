@@ -99,7 +99,7 @@ class MCPHub:
                     server_name=self.name,
                     server_version=self.version,
                     capabilities=self.server.get_capabilities(
-                        notification_options=types.NotificationOptions(),
+                        notification_options=None,
                         experimental_capabilities={}
                     )
                 )
